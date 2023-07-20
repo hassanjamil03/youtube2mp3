@@ -1,21 +1,40 @@
 <template>
   <div class="container">
-    <h1>API Search</h1>
-    <div class="search-container">
-      <input v-model="searchTerm" type="text" placeholder="Enter your search term" />
-      <button @click="search">Search</button>
+    <h1>Enter songs names seperated by newline. If you would like to provide the youtube link for the song instead, it must start with "https:"</h1>
+    <div>
+      <textarea v-model="searchTerm">test</textarea>
     </div>
-    <div class="results" v-if="searchResults">
-      <h2>Search Results</h2>
-      <ul>
-        <li v-for="result in searchResults" :key="result.id">
-          {{ result.title }}
-          <button @click="download(result.id)">Download</button>
-        </li>
-      </ul>
+    <button @click="search">Search</button>
+
+    <div v-if="state === 'LOADING'">
+      Loading...
     </div>
+
+    <div v-else-if="state === 'SUCCESS'">
+      <div class="results" v-if="searchResults">
+        <h2>Search Results</h2>
+        <ul>
+          <li v-for="result in searchResults" :key="result.link">
+            {{ result.title }}
+            <a :href="result.link" :download="title">
+              <button>Download</button>
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <div v-else-if="state === 'FAIL'">
+      Data failed to load
+    </div>
+
+    <div v-else>
+      No data to display
+    </div>
+    
   </div>
 </template>
+
 
 <script>
 import axios from 'axios';
@@ -24,33 +43,45 @@ export default {
   data() {
     return {
       searchTerm: '',
-      searchResults: null,
+      searchResults: [],
+      state: ''
     };
   },
   methods: {
     async search() {
-      try {
-        const response = await axios.get(`/${this.searchTerm}`);
-        this.searchResults = response.data.results;
-      } catch (error) {
-        console.error('Error searching:', error);
-        // Handle error
-      }
-    },
-    async download(id) {
-      try {
-        const response = await axios.get(`/${id}`, {
-          responseType: 'blob',
-        });
+      this.state = 'LOADING'
 
-        const url = window.URL.createObjectURL(new Blob([response.data]));
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', 'audio.mp3');
-        document.body.appendChild(link);
-        link.click();
+      try {
+        const searchTerms = this.searchTerm.split('\n')
+
+        await Promise.all(searchTerms.forEach(async (term) => {
+          var link = ''
+          const match = term.match(/\bhttps:\/\/\S+/g)
+          console.log(match);
+          if (match) {
+            link = match[0]
+          }
+
+          var response = await axios.get("http://localhost:3000/search", {
+            params: {
+              q : term,
+              l : link
+            }
+          });
+          console.log(response.data);
+
+          this.searchResults.push({
+            'link' : response.data['link']['link'],
+            'title' : response.data['link']['title'] + '.mp3'
+          })
+
+          this.state = response.data['STATE']
+        }))
+        
+        
       } catch (error) {
-        console.error('Error downloading:', error);
+        this.state = 'FAIL'
+        console.error('Error searching:', error);
         // Handle error
       }
     },
